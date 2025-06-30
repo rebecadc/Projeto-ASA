@@ -1,0 +1,77 @@
+---
+- name: Configurar LVM no servidor arq
+  hosts: arq
+  become: yes
+  collections:
+    - community.general
+
+  vars:
+    vg_name: dados
+    lv_name: ifpb
+    lv_size: 15g
+    mount_point: /dados
+
+  tasks:
+    - name: Instalar pacotes LVM e parted
+      apt:
+        name:
+          - lvm2
+          - parted
+        state: present
+        update_cache: yes
+
+    - name: Criar partições nos discos adicionais
+      parted:
+        device: "/dev/{{ item }}"
+        number: 1
+        state: present
+        part_type: primary
+        fs_type: ext4
+        resize: yes
+      loop:
+        - sdb
+        - sdc
+        - sdd
+      when: ansible_devices[item].partitions | length == 0
+
+    - name: Criar volumes físicos
+      community.general.pvcreate:
+        pvs:
+          - /dev/sdb1
+          - /dev/sdc1
+          - /dev/sdd1
+
+    - name: Criar volume group
+      community.general.lvg:
+        vg: "{{ vg_name }}"
+        pvs:
+          - /dev/sdb1
+          - /dev/sdc1
+          - /dev/sdd1
+
+    - name: Criar logical volume
+      community.general.lvol:
+        vg: "{{ vg_name }}"
+        lv: "{{ lv_name }}"
+        size: "{{ lv_size }}"
+
+    - name: Formatar o logical volume com ext4
+      filesystem:
+        fstype: ext4
+        dev: "/dev/{{ vg_name }}/{{ lv_name }}"
+
+    - name: Criar ponto de montagem
+      file:
+        path: "{{ mount_point }}"
+        state: directory
+        mode: '0755'
+
+    - name: Adicionar entrada no /etc/fstab
+      mount:
+        path: "{{ mount_point }}"
+        src: "/dev/{{ vg_name }}/{{ lv_name }}"
+        fstype: ext4
+        opts: defaults
+        dump: 0
+        passno: 2
+        state: mounted

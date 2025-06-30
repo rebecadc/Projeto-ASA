@@ -1,0 +1,128 @@
+---
+- name: Configuração base para todas as VMs
+  hosts: all
+  become: true
+
+  vars:
+    users:
+      - nome: clara
+        chave: "{{ lookup('file', 'files/clara.key.pub') }}"
+      - nome: rebeca
+        chave: "{{ lookup('file', 'files/rebeca.key.pub') }}"
+
+  tasks:
+    - name: Atualizar o sistema
+      apt:
+        update_cache: yes
+        upgrade: dist
+
+    - name: Instalar chrony
+      apt:
+        name: chrony
+        state: present
+
+    - name: Configurar servidor pool.ntp.br no chrony
+      lineinfile:
+        path: /etc/chrony/chrony.conf
+        regexp: '^pool'
+        line: 'pool pool.ntp.br iburst'
+        state: present
+        backup: yes
+      notify: Restart chrony
+
+    - name: Ativar o chrony
+      service:
+        name: chrony
+        state: started
+        enabled: yes
+
+    - name: Ajustar timezone para America/Recife
+      community.general.timezone:
+        name: America/Recife
+
+    - name: Criar grupo ifpb
+      group:
+        name: ifpb
+        state: present
+
+    - name: Criar usuários
+      user:
+        name: "{{ item.nome }}"
+        groups: ifpb
+        append: yes
+        shell: /bin/bash
+        state: present
+      loop: "{{ users }}"
+
+    - name: Criar diretório .ssh
+      file:
+        path: "/home/{{ item.nome }}/.ssh"
+        state: directory
+        owner: "{{ item.nome }}"
+        group: "{{ item.nome }}"
+        mode: '0700'
+      loop: "{{ users }}"
+
+    - name: Adicionar chave pública ao authorized_keys
+      copy:
+        content: "{{ item.chave }}"
+        dest: "/home/{{ item.nome }}/.ssh/authorized_keys"
+        owner: "{{ item.nome }}"
+        group: "{{ item.nome }}"
+        mode: '0600'
+      loop: "{{ users }}"
+
+    - name: Criar banner de aviso SSH
+      copy:
+        dest: /etc/issue.net
+        content: |
+          Acesso apenas para pessoas com autorização expressa.
+          Seu acesso está sendo monitorado !!!
+
+    - name: Ativar uso do banner no SSH
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?Banner'
+        line: 'Banner /etc/issue.net'
+
+    - name: Bloquear login root no SSH
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin no'
+
+    - name: Permitir apenas autenticação por chave
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication no'
+
+    - name: Permitir acesso apenas a grupos autorizados
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?AllowGroups'
+        line: 'AllowGroups vagrant ifpb'
+
+    - name: Reiniciar SSH
+      service:
+        name: ssh
+        state: restarted
+        enabled: yes
+
+    - name: Instalar cliente NFS
+      apt:
+        name: nfs-common
+        state: present
+
+    - name: Configurar sudo para grupo ifpb
+      lineinfile:
+        path: /etc/sudoers
+        regexp: '^%ifpb'
+        line: '%ifpb ALL=(ALL:ALL) ALL'
+        validate: '/usr/sbin/visudo -cf %s'
+
+  handlers:
+    - name: Restart chrony
+      service:
+        name: chrony
+        state: restarted

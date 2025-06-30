@@ -1,0 +1,8 @@
+---
+- import_playbook: common.yml
+- import_playbook: lvm-arq.yml
+- import_playbook: nfs-arq.yml
+- import_playbook: dhcp-arq.yml
+- import_playbook: db.yml
+- import_playbook: app.yml
+- import_playbook: cli.yml

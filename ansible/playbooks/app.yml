@@ -1,0 +1,72 @@
+---
+- name: Configurar servidor de aplicação app
+  hosts: app
+  become: yes
+
+  vars:
+    mount_point: /var/nfs
+    remote_share: 192.168.56.121:/dados/nfs
+    index_content: |
+      <html>
+      <head><title>Projeto Administração de Sistemas Abertos</title></head>
+      <body>
+        <h1>Projeto DevOps com Vagrant e Ansible</h1>
+        <p>Disciplina: Administração de Sistemas Abertos</p>
+        <p>O projeto tem como objetivo desenvolver competências práticas em DevOps e Infraestrutura como Código (IaC) utilizando as ferramentas Vagrant e Ansible.</p>
+        <p>Integrantes:</p>
+        <ul>
+          <li>Clara - Matrícula: 20232380021</li>
+          <li>Rebeca - Matrícula: 20232380009</li>
+        </ul>
+      </body>
+      </html>
+
+  tasks:
+    - name: Instalar apache2
+      apt:
+        name: apache2
+        state: present
+        update_cache: yes
+
+    - name: Substituir a página padrão do Apache por index.html personalizado
+      copy:
+        dest: /var/www/html/index.html
+        content: "{{ index_content }}"
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    - name: Recarregar apache2
+      service:
+        name: apache2
+        state: reloaded
+
+    - name: Instalar autofs
+      apt:
+        name: autofs
+        state: present
+
+    - name: Configurar montagem via autofs
+      copy:
+        dest: /etc/auto.master.d/nfs.autofs
+        content: |
+          /var/nfs /etc/auto.nfs
+
+    - name: Criar arquivo de configuração /etc/auto.nfs
+      copy:
+        dest: /etc/auto.nfs
+        content: |
+          share -rw,soft,intr {{ remote_share }}
+
+    - name: Criar ponto de montagem local
+      file:
+        path: /var/nfs
+        state: directory
+        mode: '0755'
+
+    - name: Reiniciar o serviço autofs
+      service:
+        name: autofs
+        state: restarted
+        enabled: yes
+
