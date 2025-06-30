@@ -90,6 +90,20 @@ Quatro máquinas virtuais configuradas com Vagrant:
 ├── Vagrantfile
 ```
 
+## Playbooks Explicados
+
+| Playbook  | Descrição |
+| ------------- | ------------- |
+| common.yml  | Configuração base (usuários, SSH, timezone, NTP, sudo, NFS client) para todas as VMs  |
+| lvm-arq.yml  | Cria partições, volume group e logical volume no servidor de arquivos (arq)  |
+| nfs-arq.yml  | Configura o compartilhamento NFS seguro para os demais hosts  |
+| dhcp-arq.yml  | Configura o serviço DHCP autoritativo com reservas de IP para db e app  |
+| db.yml  | Instala MariaDB e monta /dados/nfs automaticamente via autofs  |
+| app.yml  | Instala Apache2 e exibe uma página HTML do projeto; monta /dados/nfs  |
+| cli.yml  | Instala Firefox, ativa X11 Forwarding e monta /dados/nfs  |
+| site.yml  | Executa todos os playbooks na ordem correta  |
+
+
 ## Como Executar o Projeto
 
 Clone este repositório:
@@ -103,6 +117,11 @@ Inicie as VMs com o Vagrant:
 
 ```
 vagrant up
+```
+Instale a coleção community.general:
+
+```
+ansible-galaxy collection install community.general
 ```
 
 Execute os playbooks do Ansible:
